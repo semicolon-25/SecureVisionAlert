@@ -1,0 +1,7 @@
+secret.py
+credentials.json
+token.json
+media/
+__pycache__/
+*.pyc
+.env
