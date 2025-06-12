@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SecureVision Multi-User</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Poppins', sans-serif;
+      background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+      color: #fff;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 30px 20px;
+    }
+
+    h1 {
+      font-size: 2rem;
+      margin-bottom: 20px;
+      color: #00ffd1;
+    }
+
+    form, #video, #status {
+      max-width: 90vw;
+      width: 400px;
+    }
+
+    input, button {
+      width: 100%;
+      padding: 12px 15px;
+      margin: 10px 0;
+      font-size: 1rem;
+      border: none;
+      border-radius: 10px;
+      outline: none;
+    }
+
+    input {
+      background-color: #333;
+      color: white;
+    }
+
+    button {
+      background-color: #00ffd1;
+      color: #000;
+      font-weight: bold;
+      cursor: pointer;
+      transition: 0.3s ease;
+    }
+
+    button:hover {
+      background-color: #00c5a0;
+    }
+
+    #stopBtn, #restartBtn {
+      display: none;
+      margin-top: 10px;
+    }
+
+    #stopBtn {
+      background-color: crimson;
+    }
+
+    #restartBtn {
+      background-color: forestgreen;
+    }
+
+    video, canvas {
+      margin-top: 20px;
+      border-radius: 12px;
+      border: 2px solid #888;
+      width: 100%;
+      height: auto;
+    }
+
+    #status {
+      margin-top: 25px;
+      font-size: 1.1rem;
+      text-align: center;
+      line-height: 1.5;
+    }
+
+    a {
+      text-decoration: none;
+      color: #00ffd1;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <h1>🔒 SecureVision - Multi-User</h1>
+
+  <form id="userForm">
+    <input type="text" id="whatsapp" placeholder="Enter WhatsApp Number (+91...)" required>
+    <input type="text" id="drive" placeholder="Enter Google Drive Folder ID" required>
+    <button type="submit">▶️ Start Detection</button>
+  </form>
+
+  <button id="stopBtn">🛑 Stop Detection</button>
+  <button id="restartBtn">🔁 Restart Detection</button>
+
+  <video id="video" autoplay muted></video>
+  <canvas id="canvas" width="640" height="480" style="display:none;"></canvas>
+
+  <div id="status">Waiting to start...</div>
+
+  <script>
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const status = document.getElementById('status');
+    const ctx = canvas.getContext('2d');
+
+    const stopBtn = document.getElementById('stopBtn');
+    const restartBtn = document.getElementById('restartBtn');
+    const userForm = document.getElementById('userForm');
+
+    let userData = null;
+    let detectionActive = true;
+    let stream = null;
+
+    userForm.onsubmit = async function (e) {
+      e.preventDefault();
+      userData = {
+        whatsapp: document.getElementById('whatsapp').value,
+        drive: document.getElementById('drive').value
+      };
+      userForm.style.display = "none";
+      stopBtn.style.display = "inline-block";
+      restartBtn.style.display = "none";
+      status.innerText = "🔄 Starting camera...";
+      await setupCamera();
+    };
+
+    stopBtn.onclick = function () {
+      detectionActive = false;
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+        video.srcObject = null;
+      }
+      status.innerText = "🛑 Detection stopped.";
+      stopBtn.style.display = "none";
+      restartBtn.style.display = "inline-block";
+    };
+
+    restartBtn.onclick = async function () {
+      stopBtn.style.display = "inline-block";
+      restartBtn.style.display = "none";
+      status.innerText = "🔁 Restarting detection...";
+      await setupCamera();
+    };
+
+    async function setupCamera() {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        video.srcObject = stream;
+        await video.play();
+        detectionActive = true;
+        detectLoop();
+      } catch (err) {
+        status.innerText = "🚫 Camera error: " + err.message;
+      }
+    }
+
+    async function detectLoop() {
+      if (!userData || !detectionActive) return;
+
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const dataURL = canvas.toDataURL('image/jpeg');
+
+      try {
+        const res = await fetch('/detect', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image: dataURL, ...userData })
+        });
+        const result = await res.json();
+        if (result.person_detected) {
+          status.innerHTML = `
+            🚨 <b>Person detected!</b><br>
+            📁 Picture uploaded to Drive.
+          `;  
+          status.style.color = "#ff4f4f";
+        } else {
+          status.innerText = "✅ No person detected.";
+          status.style.color = "#00ff90";
+        }
+      } catch (error) {
+        status.innerText = "⚠️ Detection error: " + error.message;
+        status.style.color = "orange";
+      }
+
+      if (detectionActive) setTimeout(detectLoop, 1000);
+    }
+  </script>
+</body>
+</html>
